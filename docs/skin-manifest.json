@@ -1,0 +1,88 @@
+{
+  "name": "KuroCat GG Bond skin",
+  "upstream": "https://github.com/qianyiai/kurocat",
+  "upstreamCommit": "9d278754cb1d2c34acc379b9df8edffa47fcfc51",
+  "engine": "KuroCat Canvas2D / Tauri",
+  "skinId": "ggbond",
+  "compatibility": "custom build required; not a stock color-only JSON skin",
+  "art": {
+    "size": [
+      1448,
+      1086
+    ],
+    "pivot": [
+      744,
+      1000
+    ],
+    "scale": 0.285,
+    "shoulders": {
+      "left": [
+        485,
+        650
+      ],
+      "right": [
+        990,
+        650
+      ]
+    },
+    "armImageSources": {
+      "left": [
+        [
+          312,
+          70
+        ],
+        [
+          222,
+          220
+        ],
+        [
+          146,
+          335
+        ],
+        [
+          140,
+          405
+        ]
+      ],
+      "right": [
+        [
+          80,
+          70
+        ],
+        [
+          160,
+          220
+        ],
+        [
+          200,
+          335
+        ],
+        [
+          210,
+          405
+        ]
+      ]
+    },
+    "mesh": {
+      "columns": 8,
+      "rows": 16
+    }
+  },
+  "motions": {
+    "keyTravelMs": [
+      78,
+      165
+    ],
+    "mouseAcquisitionMs": [
+      140,
+      220
+    ],
+    "comboTimeoutMs": 2500,
+    "milestones": [
+      10,
+      30,
+      60,
+      100
+    ]
+  }
+}

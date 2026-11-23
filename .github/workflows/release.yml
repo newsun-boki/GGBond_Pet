@@ -1,0 +1,143 @@
+name: Build release packages
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-2022
+            platform: windows
+            arch: x64
+          - os: macos-15
+            platform: macos
+            arch: universal
+          - os: ubuntu-22.04
+            platform: linux
+            arch: amd64
+          - os: ubuntu-22.04-arm
+            platform: linux
+            arch: arm64
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.100.0
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: './src-tauri -> target'
+      - name: Install Linux system dependencies
+        if: matrix.platform == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev patchelf
+      - run: npm ci
+      - run: npm run test:motion
+      - name: Build macOS Universal app
+        if: matrix.platform == 'macos'
+        run: |
+          rustup target add aarch64-apple-darwin x86_64-apple-darwin
+          npm run tauri -- build --target universal-apple-darwin --bundles app
+      - name: Package macOS
+        if: matrix.platform == 'macos'
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          APP=src-tauri/target/universal-apple-darwin/release/bundle/macos/KuroCat-GGBond.app
+          lipo -verify_arch arm64 x86_64 "$APP/Contents/MacOS/KuroCat"
+          codesign --force --deep --sign - --identifier local.kurocat.ggbond "$APP"
+          codesign --verify --deep --strict "$APP"
+          mkdir -p release-assets dmg-staging
+          ditto "$APP" dmg-staging/KuroCat-GGBond.app
+          ln -s /Applications dmg-staging/Applications
+          cp LICENSE NOTICE.md ASSET_LICENSE.md dmg-staging/
+          hdiutil create -volname 'GGBond Pet' -srcfolder dmg-staging -ov -format UDZO "release-assets/GGBond-Pet-v${VERSION}-macos-universal.dmg"
+          ditto -c -k --keepParent "$APP" "release-assets/GGBond-Pet-v${VERSION}-macos-universal.zip"
+      - name: Build Windows installer
+        if: matrix.platform == 'windows'
+        run: npm run tauri -- build --bundles nsis
+      - name: Package Windows
+        if: matrix.platform == 'windows'
+        shell: pwsh
+        run: |
+          $version = (Get-Content package.json | ConvertFrom-Json).version
+          New-Item -ItemType Directory -Force release-assets,portable | Out-Null
+          $installer = Get-ChildItem src-tauri/target/release/bundle/nsis/*-setup.exe | Select-Object -First 1
+          if (!$installer) { throw 'NSIS installer missing' }
+          Copy-Item $installer.FullName "release-assets/GGBond-Pet-v$version-windows-x64-setup.exe"
+          Copy-Item src-tauri/target/release/KuroCat.exe portable/
+          Copy-Item LICENSE,NOTICE.md,ASSET_LICENSE.md portable/
+          Copy-Item docs/LICENSE-KuroCat.txt portable/
+          Copy-Item src/assets/dafeiyu/LICENSE-MIT.txt portable/LICENSE-BigFish.txt
+          Compress-Archive -Path portable/* -DestinationPath "release-assets/GGBond-Pet-v$version-windows-x64-portable.zip"
+      - name: Build Linux packages
+        if: matrix.platform == 'linux'
+        env:
+          APPIMAGE_EXTRACT_AND_RUN: '1'
+          NO_STRIP: 'true'
+        run: |
+          cargo test --locked --manifest-path src-tauri/Cargo.toml
+          npm run tauri -- build --bundles deb,appimage
+      - name: Package Linux and check binary
+        if: matrix.platform == 'linux'
+        env:
+          PACKAGE_ARCH: ${{ matrix.arch }}
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          mkdir -p release-assets
+          cp src-tauri/target/release/bundle/deb/*.deb "release-assets/GGBond-Pet-v${VERSION}-linux-${PACKAGE_ARCH}.deb"
+          cp src-tauri/target/release/bundle/appimage/*.AppImage "release-assets/GGBond-Pet-v${VERSION}-linux-${PACKAGE_ARCH}.AppImage"
+          ldd src-tauri/target/release/KuroCat
+          printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"release-smoke","version":"1"}}}' | src-tauri/target/release/KuroCat --mcp > /tmp/mcp-smoke.json
+          python3 -c 'import json; d=json.load(open("/tmp/mcp-smoke.json")); assert "result" in d'
+      - name: Offline browser preview
+        if: matrix.platform == 'linux' && matrix.arch == 'amd64'
+        run: |
+          npm run build:preview
+          cp dist-ggbond-preview/GGBond-Pet-preview.html release-assets/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: packages-${{ matrix.platform }}-${{ matrix.arch }}
+          path: release-assets/*
+          if-no-files-found: error
+          retention-days: 14
+  draft-release:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: packages-*
+          path: release-assets
+          merge-multiple: true
+      - name: Validate tag and create checksums
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          test "$RELEASE_TAG" = "v$(node -p "require('./package.json').version")"
+          cd release-assets
+          sha256sum * > SHA256SUMS.txt
+      - name: Prepare draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          gh release view "$RELEASE_TAG" >/dev/null 2>&1 || gh release create "$RELEASE_TAG" --verify-tag --draft --title "GGBond Pet $RELEASE_TAG" --notes-file docs/RELEASE_NOTES.md
+          gh release upload "$RELEASE_TAG" release-assets/* --clobber

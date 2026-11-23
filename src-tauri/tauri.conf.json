@@ -1,0 +1,80 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "KuroCat-GGBond",
+  "version": "1.0.0",
+  "identifier": "local.kurocat.ggbond",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "macOSPrivateApi": true,
+    "withGlobalTauri": false,
+    "windows": [
+      {
+        "label": "main",
+        "title": "GGBond Pet · 猪猪侠",
+        "width": 420,
+        "height": 440,
+        "resizable": false,
+        "decorations": false,
+        "transparent": true,
+        "shadow": false,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "focus": false,
+        "additionalBrowserArgs": "--autoplay-policy=no-user-gesture-required"
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": [
+      "app"
+    ],
+    "publisher": "newsun-boki",
+    "shortDescription": "GG Bond desktop companion, based on KuroCat",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "windows": {
+      "nsis": {
+        "installMode": "currentUser",
+        "installerIcon": "icons/icon.ico",
+        "uninstallerIcon": "icons/icon.ico"
+      }
+    },
+    "macOS": {
+      "minimumSystemVersion": "10.15"
+    },
+    "linux": {
+      "deb": {
+        "depends": [
+          "libwebkit2gtk-4.1-0",
+          "libgtk-3-0",
+          "libayatana-appindicator3-1 | libappindicator3-1"
+        ],
+        "section": "utility"
+      },
+      "appimage": {
+        "bundleMediaFramework": false
+      }
+    },
+    "resources": [
+      "../LICENSE",
+      "../NOTICE.md",
+      "../ASSET_LICENSE.md",
+      "../docs/LICENSE-KuroCat.txt",
+      "../src/assets/dafeiyu/LICENSE-MIT.txt"
+    ]
+  }
+}
