@@ -3,6 +3,11 @@ on:
   push:
     tags: ['v*']
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Existing tag to build and stage as a draft release (blank builds the selected ref only)
+        type: string
+        default: ""
 permissions:
   contents: read
 concurrency:
@@ -30,6 +35,8 @@ jobs:
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.release_tag || github.ref }}
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -57,7 +64,7 @@ jobs:
         run: |
           VERSION=$(node -p "require('./package.json').version")
           APP=src-tauri/target/universal-apple-darwin/release/bundle/macos/KuroCat-GGBond.app
-          lipo -verify_arch arm64 x86_64 "$APP/Contents/MacOS/KuroCat"
+          lipo "$APP/Contents/MacOS/KuroCat" -verify_arch arm64 x86_64
           codesign --force --deep --sign - --identifier local.kurocat.ggbond "$APP"
           codesign --verify --deep --strict "$APP"
           mkdir -p release-assets dmg-staging
@@ -116,12 +123,14 @@ jobs:
           retention-days: 14
   draft-release:
     needs: build
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: startsWith(github.ref, 'refs/tags/v') || inputs.release_tag != ''
     runs-on: ubuntu-22.04
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.release_tag || github.ref }}
       - uses: actions/download-artifact@v4
         with:
           pattern: packages-*
@@ -129,7 +138,7 @@ jobs:
           merge-multiple: true
       - name: Validate tag and create checksums
         env:
-          RELEASE_TAG: ${{ github.ref_name }}
+          RELEASE_TAG: ${{ inputs.release_tag || github.ref_name }}
         run: |
           test "$RELEASE_TAG" = "v$(node -p "require('./package.json').version")"
           cd release-assets
@@ -137,7 +146,7 @@ jobs:
       - name: Prepare draft release
         env:
           GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ github.ref_name }}
+          RELEASE_TAG: ${{ inputs.release_tag || github.ref_name }}
         run: |
           gh release view "$RELEASE_TAG" >/dev/null 2>&1 || gh release create "$RELEASE_TAG" --verify-tag --draft --title "GGBond Pet $RELEASE_TAG" --notes-file docs/RELEASE_NOTES.md
           gh release upload "$RELEASE_TAG" release-assets/* --clobber

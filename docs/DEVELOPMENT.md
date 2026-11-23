@@ -35,7 +35,7 @@ npm run tauri -- build --bundles deb,appimage
 
 ## 自动构建
 
-`ci.yml` 对 main/PR 运行前端、运动数学与离线预览检查。`release.yml` 对 v* tag 构建 Windows x64、macOS Universal、Linux amd64/arm64，汇总附件与 SHA-256 到 Draft Release。维护者检查全部产物后发布。workflow_dispatch 只产生 artifacts。
+`ci.yml` 对 main/PR 运行前端、运动数学与离线预览检查。`release.yml` 对 v* tag 构建 Windows x64、macOS Universal、Linux amd64/arm64，汇总附件与 SHA-256 到 Draft Release。维护者检查全部产物后发布。workflow_dispatch 留空 release_tag 时只生成 artifacts；填写已存在标签时，从该标签检出源码并暂存 Draft Release，可用于修复打包流程后重新打包同一份源码。
 
 版本号同步 package.json、package-lock.json、Cargo.toml、Cargo.lock、tauri.conf.json；更新 README 下载链接与 CHANGELOG。安装包必须保留各许可文件。不要提交令牌、个人设置、构建缓存、聊天记录或绝对本机路径。
 
